@@ -1,13 +1,17 @@
 # Grafana로 모니터링 환경을 구축해 보자.  
 
+### 예상 독자
+* 서비스 모니터링을 위해 Grafana 도입을 고려하고 있는 분들
+* 기존에 CloudWatch나 Pinpoint APM으로 모니터링을 하고 있었지만 마이그레이션을 고려하고 있는 분들
+
 # 서론: Why Grafana?
 
 핏토링 팀은 데모데이를 일주일 앞두고 있는 상황이다. 데모데이 예상 인원 100명을 동시에 수용할 수 있는지 확인하기 위해 개발 서버에 부하 테스트를 진행하고자 했다. 따라서 아래와 같은 이유로 모니터링 서버가 필요했다.
 
-- 개발 서버에서 부하 테스트 시, 서버에 얼마나 부하가 들어왔는지 확인하기 위해서
-- 코드 내 병목 지점을 찾아 이를 개선하기 위해서
-- 운영 서버에서 오류가 발생했을 때 이를 로그로 남겨 추적하기 위해서
-- 이외 서버 관련 지표를 빠르게 확인하기 위해서
+- 개발 서버에서 부하 테스트 시, 서버에 얼마나 부하가 들어왔는지 확인해야 했다.
+- 코드 내 병목 지점을 찾아 개선하고자 했는데, 이를 위해 트레이스를 확인해야 했다.
+- 운영 서버에서 오류가 발생했을 때 이를 로그로 남겨 추적할 수 있어야 했다.
+- 이외 서버 관련 지표를 빠르게 확인할 수 있어야 했다.
 
 기존에 핏토링 팀은 아래 서비스들을 활용하여 모니터링을 진행하고 있었다.
 
@@ -52,25 +56,25 @@
 
 ### Loki
 
-- 서버 **로그**를 수집 및 저장해주는 도구.
-- 로그 검색, 필터링, 라벨 기반 인덱싱 기능 등을 지원한다.
-- Grafana가 완벽히 지원하는 로깅 서비스.
-- 서버에서는 `Promtail`이라는 에이전트를 통해 로그를 Loki로 전달한다.
+- 서버 **로그**를 수집 및 저장해주는 도구
+- 로그 검색, 필터링, 라벨 기반 인덱싱 기능 등을 지원
+- Grafana가 완벽히 지원하는 로깅 서비스
+- 서버에서는 `Promtail`이라는 에이전트를 통해 로그를 Loki로 전달 가능
 - CloudWatch Logs 대체 가능
 
 ### Prometheus
 
-- 시계열 **메트릭** 수집 및 저장해주는 도구.
+- 시계열 **메트릭** 수집 및 저장해주는 도구
     - CPU, 메모리, 요청 수, Latency 등
-- Prometheus가 대상 서버로 가서 메트릭을 가져오는 방식 (Pull 방식).
-    - 서버에 `node_exporter`을 설치해 두면 Prometheus가 주기적으로 값을 가져와 저장한다.
+- Prometheus가 대상 서버로 가서 메트릭을 가져오는 방식 (Pull 방식)
+    - 서버에 `node_exporter`을 설치해 두면 Prometheus가 주기적으로 값을 가져와 저장하는 방식
 - CloudWatch Metrics 대체 가능
 
 ### Tempo
 
-- **분산 트랜잭션**을 수집 및 조회하는 도구.
-- 각 요청의 전체 call chain을 저장하여 Latency나 오류 추적 등을 할 수 있다.
-- Tempo UI를 통해서 간단하게 시각화해서 볼 수 있지만, Grafana와 연동해서 볼 수도 있다.
+- **트레이스**를 수집 및 조회하는 도구
+  - 트레이스란 **하나의 요청이 처리되는 전체 흐름을 기록한 것**을 의미
+- 각 요청의 전체 call chain을 저장하여 Latency나 오류 추적 가능
 - Pinpoint APM 대체 가능
 
 총 이렇게 네 가지 서비스를 사용하면 기존의 모니터링 환경을 완벽히 대체할 수 있다.
@@ -79,7 +83,7 @@ Log, Metric, Trace 수집 관련 도구는 이 외에도 굉장히 많다. 그�
 
 ## 2. 모니터링 서버에 Grafana 설치
 
-가장 먼저 모니터링 서버에 Grafana를 설치해 주었다.
+가장 먼저 모니터링 서버 인스턴스에 Grafana를 설치해 주었다.
 
 ### 1) Docker & Docker Compose 설치
 
@@ -128,7 +132,7 @@ docker-compose up -d
 
 CloudWatch에서 사용하던 데이터를 Grafana와 연결할 수도 있다고 한다. 그러나 CloudWatch 서비스는 더이상 사용하지 않을 계획이므로 따로 연결하지는 않았다.
 
-<img width="1804" height="1844" alt="1" src="https://github.com/user-attachments/assets/35ce06d6-01a7-4e4b-b604-18157cbca41e" />
+<img width="400" height="400" alt="1" src="https://github.com/user-attachments/assets/35ce06d6-01a7-4e4b-b604-18157cbca41e" />
 
 
 ## 3. 모니터링 서버에 Loki 설치
@@ -197,7 +201,7 @@ sudo mv promtail-linux-arm64 /usr/local/bin/promtail
 sudo chmod +x /usr/local/bin/promtail
 ```
 
-Promtail을 docker으로 띄울 수도 있다. 그러나 docker로 띄우게 될 경우 순수 서버 경로에 있는 애플리케이션 로그 파일에 접근하기 힘들 것 같아서 docker로 띄우지 않기로 했다.
+Promtail을 docker로 띄울 수도 있다. 그러나 docker로 띄우게 될 경우 순수 서버 경로에 있는 애플리케이션 로그 파일에 접근하기 힘들 것 같아서 docker로 띄우지 않기로 했다.
 
 ### 2) Promtail 설정 파일 생성하기
 
@@ -277,7 +281,7 @@ sudo systemctl status promtail
 
 이제 로그가 보이기 시작한다.
 
-<img width="2904" height="1844" alt="2" src="https://github.com/user-attachments/assets/bd60c329-ac12-465a-883a-97c1a1d1bfa1" />
+<img width="600" height="400" alt="2" src="https://github.com/user-attachments/assets/bd60c329-ac12-465a-883a-97c1a1d1bfa1" />
 
 
 ## 5. dev 서버에 Node Exporter 설치
@@ -286,8 +290,8 @@ Loki와 Promtail을 설치하여 Grafana를 통해 로그를 확인할 수 있�
 
 이제 CloudWatch Metrics를 대체하기 위해 Prometheus와 Node Exporter을 설치해 주어야 한다.
 
-- Prometheus는 메트릭을 수집하는 역할으로, 모니터링 서버에 설치해야 한다.
-- Node Exporter은 각 서버의 메트릭을 제공하는 역할으로, dev 서버에 설치해야 한다.
+- Prometheus는 메트릭을 수집하는 역할로, 모니터링 서버에 설치해야 한다.
+- Node Exporter은 각 서버의 메트릭을 제공하는 역할로, dev 서버에 설치해야 한다.
 
 ### 1) Node Exporter 설치
 
@@ -340,7 +344,7 @@ Prometheus를 활용하면 JVM과 같은 애플리케이션 수준 메트릭도 
 implementation 'io.micrometer:micrometer-registry-prometheus'
 ```
 
-그리고 `build.gradle`에서 프로메테우스 관련 경로를 허용해준다.
+그리고 `build.gradle`에서 Prometheus 관련 경로를 허용해준다.
 
 ```java
 ...
@@ -358,7 +362,7 @@ management:
 ...
 ```
 
-이제 `/prometheus-provider` 경로로 접근하면 프로메테우스에게 제공할 메트릭이 표시된다.
+이제 `/prometheus-provider` 경로로 접근하면 Prometheus에게 제공할 메트릭이 표시된다.
 
 디폴트 값인 `actuator/prometheus`를 그대로 안 쓰고 `/prometheus-provider`으로 바꾼 이유는 `actuator/prometheus`를 그대로 사용하게 되면 다른 사용자에게 메트릭이 쉽게 노출될 것 같았기 때문이다(아무래도 스프링 액추에이터가 널리 사용되는 라이브러리이다 보니 개발자라면 해당 url을 쉽게 유추할 수 있을 것).
 
@@ -366,7 +370,7 @@ management:
 
 ### 1) docker-compose.yml 수정
 
-다른 서비스들과 함께 쉽고 켜고 끌 수 있도록 Prometheus 역시 docker으로 띄울 것이다.
+다른 서비스들과 함께 쉽고 켜고 끌 수 있도록 Prometheus 역시 docker로 띄울 것이다.
 그래서 아래와 같이 `docker-compose.yml` 파일을 수정해 주었다.
 
 ```yaml
@@ -444,16 +448,16 @@ scrape_configs:
 
 이제 Prometheus도 실행된다. 메트릭을 Grafana에 띄울 수 있게 됐다. 심지어 본래 확인할 수 없었던 애플리케이션 수준 메트릭도 쉽게 확인할 수 있게 되었다.
 
-<img width="2904" height="1844" alt="3" src="https://github.com/user-attachments/assets/e9424cda-0f27-4626-bff5-1db4428cfc4f" />
+<img width="600" height="400" alt="3" src="https://github.com/user-attachments/assets/e9424cda-0f27-4626-bff5-1db4428cfc4f" />
 
 
 ## 8. Tempo 설치
 
 ### 1) docker-compose.yml 수정
 
-마지막으로 APM을 위해 모니터링 서버에 Tempo를 설치해 주어야 한다. Tempo는 Trace(애플리케이션에서 발생한 요청의 흐름)를 저장하는 서비스이다.
+마지막으로 APM을 위해 모니터링 서버 인스턴스에 Tempo를 설치해 주어야 한다. Tempo는 Trace(애플리케이션에서 발생한 요청의 흐름)를 저장하는 서비스이다.
 
-모니터링 서버에는 지금 굉장히 많은 서비스(Grafana, Loki, Prometheus)가 Docker에서 돌아가고 있다. Docker compose로 한 번에 켜고 끄기 쉽도록 Tempo도 Docker로 띄워 보자.
+모니터링 서버 인스턴스에는 지금 굉장히 많은 서비스(Grafana, Loki, Prometheus)가 Docker에서 돌아가고 있다. Docker compose로 한 번에 켜고 끄기 쉽도록 Tempo도 Docker로 띄워 보자.
 
 ```yaml
 version: "3.8"
@@ -540,13 +544,13 @@ storage:
       path: /var/tempo/traces
 ```
 
-otlp http는 열어줄 필요가 없긴 한데 그냥 열어주었다.
+OTLP HTTP는 열어줄 필요가 없긴 한데 그냥 열어주었다.
 
 ## 9. Tempo Exporter 설정
 
 ### 1) opentelemetry 라이브러리 설치
 
-모니터링 서버에 Tempo를 설치하여 trace를 수집하고 저장할 수 있게 됐다. 그렇다면 이제 어플리케이션이 띄워진 서버에서 trace를 계측하여 Tempo로 전송해 주어야 한다.
+모니터링 서버 인스턴스에 Tempo를 설치하여 trace를 수집하고 저장할 수 있게 됐다. 그렇다면 이제 애플리케이션이 띄워진 서버에서 trace를 계측하여 Tempo로 전송해 주어야 한다.
 
 trace를 계측하여 전송하는 방식은 아래 두 가지로 나뉜다.
 
@@ -561,9 +565,9 @@ implementation 'io.opentelemetry:opentelemetry-exporter-otlp'
 implementation 'net.ttddyy.observation:datasource-micrometer-spring-boot:1.2.0'
 ```
 
-- `io.micrometer:micrometer-tracing-bridge-otel`: Spring Boot에서 일어나는 이벤트에 대한 trace, span를 생성하여 OpenTelemetry(OTel) 형식으로 변환.
-- `net.ttddyy.observation:datasource-micrometer-spring-boot`: 애플리케이션의 JDBC(DB) 호출을 감지하고 trace, span 데이터를 생성.
-- `io.opentelemetry:opentelemetry-exporter-otlp`: 변환된 span 데이터를 OTLP 프로토콜을 사용하여 Tempo로 전송.
+- `io.micrometer:micrometer-tracing-bridge-otel`: 스프링부트에서 일어나는 이벤트에 대한 trace, span를 생성하여 OpenTelemetry(OTel) 형식으로 변환
+- `net.ttddyy.observation:datasource-micrometer-spring-boot`: 애플리케이션의 JDBC(DB) 호출을 감지하고 trace, span 데이터를 생성
+- `io.opentelemetry:opentelemetry-exporter-otlp`: 변환된 span 데이터를 OTLP 프로토콜을 사용하여 Tempo로 전송
 
 ### 2) application.yml 수정
 
@@ -590,12 +594,12 @@ jdbc:
 ```
 
 - `${TRACING_ENABLE}`
-    - trace를 자동으로 계측할 것인지 여부.
+    - trace를 자동으로 계측할 것인지 여부
     - dev 서버에는 true로, 로컬이나 prod 서버에는 false로 지정한다.
-    → dev 서버의 trace만 Tempo에 기록됨.
+    → dev 서버의 trace만 Tempo에 기록된다.
 - `${TEMPO_GRPC_LISTENER_URL}` : `{모니터링 서버의 TEMPO OTLP GRPC 경로}`
 - `${DB_TRACING_ENABLE}`
-    - SQL문에 대한 trace도 계측할 것인지 여부.
+    - SQL문에 대한 trace도 계측할 것인지 여부
     - 이게 false가 되면 Tempo에서 SQL문은 보이지 않는다. (단순히 DB를 조회했다는 사실만 알 수 있음)
 
 위 환경변수들을 환경에 맞게 `.env`에 등록한다.
@@ -610,7 +614,7 @@ https://deuk9.github.io/blog/monitoring/spring-kafka-trace-monitoring/
 
 이제 Trace도 Grafana를 통해 확인할 수 있게 되었다.
 
-<img width="2904" height="1844" alt="4" src="https://github.com/user-attachments/assets/38263f0c-0f93-4ef4-a50d-68f7fcf6dea4" />
+<img width="600" height="400" alt="4" src="https://github.com/user-attachments/assets/38263f0c-0f93-4ef4-a50d-68f7fcf6dea4" />
 
 
 
@@ -671,7 +675,7 @@ scrape_configs:
 
 # 결론
 
-위 과정을 거쳐 핏토링 팀은 Grafana를 활용한 모니터링 서버를 구축할 수 있었다. 모니터링 서버에서 Grafana와 관련 서비스를 모두 켜고 `http://{모니터링 서버 IP}:80`으로 들어가면 Grafana 페이지로 접근할 수 있다.
+위 과정을 거쳐 핏토링 팀은 Grafana를 활용한 모니터링 서버를 구축할 수 있었다. 모니터링 서버 인스턴스에서 Grafana와 관련 서비스를 모두 켜고 `http://{모니터링 서버 IP}:80`으로 들어가면 Grafana 페이지로 접근할 수 있다.
 
 이 글을 작성하고 있는 지금은 데모데이를 모두 무사히 끝냈다. 기존 방식과 비교하여 Grafana의 장단점을 비교해보면 아래와 같다.
 
